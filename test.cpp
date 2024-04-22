@@ -97,6 +97,18 @@ void DemoAccept()
 		alignas(MAX_NETWORK_ADDRESS_SZ) sockaddr_in RemoteAddr;
 	} Buffer;
 
+	// Unlike 'AcceptEx`, `NxAccept` takes a singular buffer that serves as both the buffer for auxillary (address-) data and
+	// also optionally an initial receive I/O buffer, partitioned as follows:
+	//
+	// +----------------+----------------+----------------
+	// | Local Address  | Remote Address | Receive I/O ...
+	// +----------------+----------------+----------------
+	//  
+	// The individual local/remote address buffers are a fixed size of `MAX_NETWORK_ADDRESS_SZ` and are always returned. Any
+	// additional buffer space provided implies the desire for delayed acceptance behavior, where-in completion will only occur
+	// once atleast 1 byte of application-layer data is received. The size of the receive buffer is simply calculated as the
+	// `BufferLength` minus `2*MAX_NETWORK_ADDRESS_SZ`, with zero meaning to disable delayed acceptance.
+	//
 	NxAccept(hSocket, &ISB, hAccept, &Buffer, sizeof(Buffer));
 
 	WaitForComplete();
@@ -107,9 +119,6 @@ void DemoAccept()
 
 void main()
 {
-	HANDLE hSocket;
-	
-
 	// Currently NAPI only exposes support for IOCP-based IRP completion notification, as the expected use-case is 
 	// for server software.
 	hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
