@@ -26,7 +26,7 @@ void DemoConnect()
 	HANDLE hSocket;
 	
 
-	NxSocket(AF_INET, IPPROTO_TCP, &hSocket);
+	//NxSocket(AF_INET, IPPROTO_TCP, &hSocket);
 
 	CreateIoCompletionPort(hSocket, hIOCP, 0, 0);
 
@@ -78,8 +78,8 @@ void DemoAccept()
 	HANDLE hAccept;
 
 
-	NxSocket(AF_INET, IPPROTO_TCP, &hSocket);
-	NxSocket(AF_INET, IPPROTO_TCP, &hAccept);
+	//NxSocket(AF_INET, IPPROTO_TCP, &hSocket);
+	//NxSocket(AF_INET, IPPROTO_TCP, &hAccept);
 
 	CreateIoCompletionPort(hSocket, hIOCP, 0, 0);
 
@@ -125,5 +125,25 @@ void main()
 
 
 	//DemoAccept();
-	DemoConnect();
+	//DemoConnect();
+
+	auto r = NxEnableRegisteredIo();
+
+
+	void* Region = VirtualAlloc(NULL, 0x2000, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+
+	ULONG RegionId;
+	auto res = NxRegisterIoRegion(Region, 0x2000, &RegionId);
+
+
+	RIO_NOTIFY Notify;
+	Notify.Type = RIO_NOTIFY_EVENT;
+	Notify.Event.EventHandle = CreateEvent(NULL, TRUE, FALSE, NULL);
+	Notify.Event.NotifyReset = FALSE;
+
+	void* Ring = VirtualAlloc(NULL, sizeof(RIO_RING) + 1024 * sizeof(RIO_COMPLETION_ENTRY), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+
+	ULONG RingId = 0xDDEE;
+
+	auto Status = NxRegisterCompletionRing(Ring, 1024, &Notify, &RingId);
 }

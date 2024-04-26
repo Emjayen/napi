@@ -1,6 +1,6 @@
 /*
  * afd.h
- *   Internal. Defines the interface to AFD.
+ *   Defines the interface to the Auxillary Function Driver (afd.sys)
  *
  */
 #pragma once
@@ -18,10 +18,11 @@
 #define AFD_ACCEPTEX        32
 #define AFD_SET_TDI_OPT     47 // Internally TdiSetInformationEx
 #define AFD_CONNECTEX       49
+#define AFD_RIO             70
 
 // AFD IOCTLs
 #define FSCTL_AFD_BASE   FILE_DEVICE_NETWORK
-#define _AFD_CONTROL_CODE(Operation,Method) \
+#define _AFD_CONTROL_CODE(Operation, Method) \
   ((FSCTL_AFD_BASE)<<12 | (Operation<<2) | Method)
 
 #define IOCTL_AFD_BIND \
@@ -32,6 +33,9 @@
 
 #define IOCTL_AFD_START_LISTEN \
   _AFD_CONTROL_CODE(AFD_START_LISTEN, METHOD_NEITHER)
+
+#define IOCTL_AFD_RIO \
+  _AFD_CONTROL_CODE(AFD_RIO, METHOD_NEITHER)
 
 #define IOCTL_AFD_RECV \
   _AFD_CONTROL_CODE(AFD_RECV, METHOD_NEITHER)
@@ -127,14 +131,17 @@
 #define TDI_ADDRESS_TYPE_IP6       ((USHORT) 23) // IP version 6
 #define TDI_ADDRESS_TYPE_NETBIOS_UNICODE_EX       ((USHORT)24) // WCHAR Netbios address
 
-// AFD multiplexed device name.
+// AFD device name.
 #define AFD_DEVICE_NAME  L"\\Device\\Afd\\Endpoint"
+
+// AFD RIO registration device name
+#define AFD_RIO_DEVICE_NAME  L"\\Device\\Afd\\RioRegDomain"
 
 struct AFD_CREATE
 {
 #define AfdOpenPacket "AfdOpenPacketXX"
 
-	// Inline FILE_FULL_EA_INFORMATION
+	// FILE_FULL_EA_INFORMATION
 	struct
 	{
 		ULONG NextEntryOffset;
@@ -152,6 +159,8 @@ struct AFD_CREATE
 	ULONG SizeOfTdiName;
 	CHAR TdiName[9];
 };
+
+
 
 
 struct AFD_BIND_DATA
@@ -227,4 +236,76 @@ struct AFD_RECV_DATA
 	ULONG AfdFlags;
 	ULONG TdiFlags;
 	ULONG Unused;
+};
+
+
+// Registered I/O Operations
+#define AFD_RIO_CQ_REGISTER 0
+#define AFD_RIO_CQ_CLOSE    1
+#define AFD_RIO_NOTIFY      2
+#define AFD_RIO_RQ_REGISTER 3
+#define AFD_RIO_REGISTER    4
+#define AFD_RIO_DEREGISTER  5
+#define AFD_RIO_POKE        6
+
+struct AFD_RIO_REGISTER_IN
+{
+	ULONG Operation;
+	PVOID64 RegionBaseAddress;
+	ULONG RegionSize;
+};
+
+
+struct AFD_RIO_CQ_REGISTER_IN
+{
+	ULONG Operation;
+	ULONG RingSize;
+	ULONG NotificationType;
+
+	union
+	{
+		struct
+		{
+			HANDLE EventHandle;
+			BOOL NotifyReset;
+		} Event;
+
+		struct
+		{
+			HANDLE PortHandle;
+			PVOID64 Context;
+			PVOID64 IoStatusBlock;
+		} IOCP;
+	};
+	
+	ULONG AllocationSize;
+	PVOID64 Ring;
+};
+
+
+struct AFD_RIO_RQ_REGISTER_IN
+{
+	ULONG Operation;
+	ULONG SendCompletionQueueId;
+	ULONG ReceiveCompletionQueueId;
+	ULONG SendQueueSize;
+	ULONG SendAllocationSize;
+	PVOID64 SendRingPtr;
+	ULONG ReceiveQueueSize;
+	ULONG ReceiveAllocationSize;
+	PVOID64 ReceiveRingPtr;
+	PVOID64 RioDomainHandle;
+	PVOID Context;
+};
+
+
+struct RIO_REQUEST_QUEUE
+{
+	ULONG Magic;
+	ULONG Unused;
+	BOOL UnkFromParam3;
+	ULONG SendQueueSize;
+	ULONG ReceiveQueueSize;
+	PVOID SendRingPtr;
+	PVOID ReceiveRingPtr;
 };

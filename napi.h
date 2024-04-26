@@ -51,6 +51,9 @@
 #define MAX_NETWORK_ADDRESS_SZ   32
 #define MAX_ENDPOINT_ADDRESS_SZ  (MAX_NETWORK_ADDRESS_SZ*2)
 
+// Socket creation flags
+#define SOCK_FLAG_RIO  (1<<0) /* Enable support for Registered I/O with this socket. */
+
 
 // Network address
 struct sockaddr
@@ -67,6 +70,69 @@ struct sockaddr_in
 	BYTE Zero[8];
 };
 
+// Registered I/O datastructures
+
+// Completion notification parameters
+#define RIO_NOTIFY_EVENT  1
+#define RIO_NOTIFY_PORT   2
+
+struct RIO_NOTIFY
+{
+	ULONG Type;
+
+	union
+	{
+		struct
+		{
+			HANDLE EventHandle;
+			BOOL NotifyReset;
+		} Event;
+
+		struct
+		{
+			HANDLE PortHandle;
+			PVOID Context;
+			IO_STATUS_BLOCK* IoStatusBlock;
+		} IOCP;
+	};
+};
+
+// Ring control area
+__declspec(align(16)) struct RIO_RING
+{
+	ULONG Head;
+	ULONG Tail;
+};
+
+// Buffer descriptor
+struct RIO_BUF
+{
+	ULONG RegionId;
+	ULONG Offset;
+	ULONG Length;
+};
+
+// Request ring entry
+struct RIO_REQUEST_ENTRY
+{
+	RIO_BUF Data;
+	RIO_BUF LocalAddr;
+	RIO_BUF RemoteAddr;
+	RIO_BUF Control;
+	RIO_BUF ReceiveFlags;
+	ULONG Flags;
+	PVOID64 Context;
+};
+
+// Completion ring entry
+struct RIO_COMPLETION_ENTRY
+{
+	ULONG Status;
+	ULONG Information;
+	PVOID64 Context;
+	PVOID64 RequestContext;
+};
+
 // SGIO buffer descriptor
 struct NETBUF
 {
@@ -77,23 +143,44 @@ struct NETBUF
 
 /*
  * NxSocket
+ *    Creates a socket.
+ * 
+ * Parameters:
+ *    [in]  'Family'       -- Specifies the address family; see AF_*
+ *    [in]  'Protocol'     -- Specifies the transport protocol; see IP_PROTO_*
+ *    [in]  'Flags'        -- Various flags; see SOCK_FLAG_*
+ *    [out] 'SocketHandle' -- Receives the resulting socket on success. Undefined on failure.
  *
+ * Return:
+ *    On success returns STATUS_SUCCESS, elsewise returns an error status code.
+ * 
  */
 NTSTATUS NxSocket
 (
 	USHORT Family, 
-	ULONG Protocol, 
-	HANDLE* hSocketHandle
+	ULONG Protocol,
+	ULONG Flags,
+	HANDLE* SocketHandle
 );
 
 
 /*
  * NxBind
+ *   Bind socket to local address.
+ * 
+ * Parameters:
+ *   [in] 'Socket'        -- Handle to the socket to be bound.
+ *   [in] 'Address'       -- Pointer to the address of which to bind the socket to.
+ *   [in] 'AddressLength' -- Length of the address pointed to by 'Address'.
+ *   [in] 'Share'         -- Address sharing mode; see: BIND_SHARE_*
+ * 
+ * Return:
+ *    On success returns STATUS_SUCCESS, elsewise returns an error status code.
  *
  */
 NTSTATUS NxBind
 (
-	HANDLE hSocket, 
+	HANDLE Socket, 
 	sockaddr* Address, 
 	ULONG AddressLength, 
 	ULONG Share
@@ -102,6 +189,19 @@ NTSTATUS NxBind
 
 /*
  * NxListen
+ *   Enable a connection-oriented socket to begin accepting connections. The socket must
+ *   be bound prior to this call.
+ * 
+ * Parameters:
+ *   [in] 'Socket'  -- Handle to the socket to begin listening.
+ *   [in] 'Backlog' -- Hint of the internal maximum size of the accept queue. May be zero.
+ * 
+ * Remarks:
+ *   Similarly to socket buffers, the accept queue functions as a fallback for kernel socket
+ *   allocations that cannot be serviced by a pending user accept operation.
+ *
+ * Return:
+ *    On success returns STATUS_SUCCESS, elsewise returns an error status code.
  *
  */
 NTSTATUS NxListen
@@ -113,7 +213,11 @@ NTSTATUS NxListen
 
 /*
  * NxConnect
- *
+ *   Initiate connection to remote endpoint.
+ * 
+ * Parameters:
+ *   [in] 'Socket' -- The socket to connect.
+ *   [in] 'IoStatus' -- 
  */
 NTSTATUS NxConnect
 (
@@ -174,4 +278,101 @@ NTSTATUS NxSetOption
 	HANDLE hSocket,
 	ULONG Option,
 	ULONG Value
+);
+
+
+
+
+
+//
+// Registered I/O
+//
+
+/*
+ * NxEnableRegisteredIo
+ *   Required one-shot initialization for subsequent usage of the Registered I/O (RIO) API.
+ * 
+ * Parameters:
+ *   None.
+ * 
+ * Return:
+ *    On success returns STATUS_SUCCESS, elsewise returns an error status code.
+ *   
+ */
+NTSTATUS NxEnableRegisteredIo();
+
+
+/*
+ * NxRegisterIoRegion
+ *    Registers a region of memory to enable it to be used as the source/destination for buffers passed
+ *    to RIO send/receive operations.
+ * 
+ * Parameters:
+ *    [in]  'RegionBase' -- Pointer to the base address of the region to be registered.
+ *    [in]  'Size'       -- Size of the region, in bytes.
+ *    [out] 'RegionId'   -- Receives an identifier that uniquely identifies the region.
+ * 
+ * Return:
+ *    On success returns STATUS_SUCCESS, elsewise returns an error status code.
+ *
+ */
+NTSTATUS NxRegisterIoRegion
+(
+	PVOID RegionBase,
+	ULONG Size,
+	ULONG* RegionId
+);
+
+
+/*
+ * NxRegisterCompletionRing
+ *   Registers a ring which will receive I/O completion notifications. 
+ * 
+ * Parameters:
+ *   [in]  'Ring'   -- A pointer to the region of memory which will serve as the completion ring.
+ *   [in]  'Size'   -- Size of the ring, in entries.
+ *   [in]  'Notify' -- Specifies parameters which control the mechanism by which the kernel notifies of entry insertion.
+ *   [out] 'RingId' -- Receives an identifier that uniquely identifies the ring.
+ * 
+ * Return:
+ *    On success returns STATUS_SUCCESS, elsewise returns an error status code.
+ *
+ */
+NTSTATUS NxRegisterCompletionRing
+(
+	PVOID Ring,
+	ULONG Size,
+	RIO_NOTIFY* Notify,
+	ULONG* RingId
+);
+
+
+/*
+ * NxRegisterRequestRing
+ *    Registers a pair of rings for submitting send and receive operations on a socket.
+ * 
+ * Parameters:
+ *    [in] 'Socket'                  -- The socket for which the rings are to be bound to.
+ *    [in, opt] 'TxRing'             -- A pointer to the ring to be used for queuing send operations.
+ *    [in, opt] 'TxRingSize'         -- The size of 'TxRing', in entries.
+ *    [in, opt] 'TxCompletionRingId' -- The completion ring which will receive notifications of send operation completion.
+ *    [in, opt] 'RxRing'             -- A pointer to the ring to be used for queuing receive operations.
+ *    [in, opt] 'RxRingSize'         -- The size of 'RxRing', in entries.
+ *    [in, opt] 'RxCompletionRingId' -- The completion ring which will receive notifications of receive operation completion.
+ *    [in, opt] 'Context'            -- User context associated with the socke,
+ * 
+ * Return:
+ *    On success returns STATUS_SUCCESS, elsewise returns an error status code.
+ *
+ */
+NTSTATUS NxRegisterRequestRing
+(
+	HANDLE Socket,
+	PVOID TxRing,
+	ULONG TxRingSize,
+	ULONG TxCompletionRingId,
+	PVOID RxRing,
+	ULONG RxRingSize,
+	ULONG RxCompletionRingId,
+	PVOID Context
 );

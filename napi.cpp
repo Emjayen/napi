@@ -8,6 +8,11 @@
 
 
 
+// Handle to the internal RIO device child.
+static HANDLE RioRegDomain;
+
+
+
 
 /*
  * NxSocket
@@ -49,6 +54,10 @@ NTSTATUS NxSocket
 
 	return NtCreateFile(hSocketHandle, GENERIC_READ | GENERIC_WRITE | SYNCHRONIZE, &ObjAttr, &IoStatus, NULL, NULL, FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN_IF, 0, &AfdCreate, sizeof(AfdCreate));
 }
+
+
+
+
 
 
 /*
@@ -277,4 +286,132 @@ NTSTATUS NxSetOption
 		Status = IoStatus.Status;
 
 	return Status;
+}
+
+
+#define AFD_RIO_CREATE_PACKET  "AfdRioRDOpenPacket"
+
+
+/*
+ * NxEnableRegisteredIo
+ *
+ */
+NTSTATUS NxEnableRegisteredIo()
+{
+	IO_STATUS_BLOCK IoStatus;
+	UNICODE_STRING DevName;
+	OBJECT_ATTRIBUTES ObjAttr;
+	
+	union
+	{
+		FILE_FULL_EA_INFORMATION Ea;
+		BYTE __pad[sizeof(Ea)-1 + sizeof(AFD_RIO_CREATE_PACKET)];
+	} AfdCreate;
+
+	RtlInitUnicodeString(&DevName, AFD_RIO_DEVICE_NAME);
+	InitializeObjectAttributes(&ObjAttr, &DevName, OBJ_CASE_INSENSITIVE | OBJ_INHERIT, 0, 0);
+
+	AfdCreate.Ea.NextEntryOffset = 0;
+	AfdCreate.Ea.Flags = 0;
+	AfdCreate.Ea.EaNameLength = sizeof(AFD_RIO_CREATE_PACKET)-1;
+	AfdCreate.Ea.EaValueLength = 0;
+	memcpy(AfdCreate.Ea.EaName, AFD_RIO_CREATE_PACKET, sizeof(AFD_RIO_CREATE_PACKET));
+
+	return NtCreateFile(&RioRegDomain, GENERIC_READ | GENERIC_WRITE, &ObjAttr, &IoStatus, NULL, NULL, FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN_IF, 0, &AfdCreate, sizeof(AfdCreate));
+}
+
+
+/*
+ * NxRegisterIoRegion
+ *
+ */
+NTSTATUS NxRegisterIoRegion
+(
+	PVOID RegionBase,
+	ULONG Size,
+	ULONG* RegionId
+)
+{
+	AFD_RIO_REGISTER_IN Input;
+	IO_STATUS_BLOCK IoStatus;
+
+	Input.Operation = AFD_RIO_REGISTER;
+	Input.RegionBaseAddress = RegionBase;
+	Input.RegionSize = Size;
+
+	return NtDeviceIoControlFile(RioRegDomain, NULL, NULL, NULL, &IoStatus, IOCTL_AFD_RIO, &Input, sizeof(Input), RegionId, sizeof(*RegionId));
+}
+
+
+
+/*
+ * NxRegisterCompletionRing
+ *
+ */
+NTSTATUS NxRegisterCompletionRing
+(
+	PVOID Ring,
+	ULONG Size,
+	RIO_NOTIFY* Notify,
+	ULONG* RingId
+)
+{
+	AFD_RIO_CQ_REGISTER_IN Input;
+	IO_STATUS_BLOCK IoStatus;
+
+	Input.Operation = AFD_RIO_CQ_REGISTER;
+	Input.RingSize = Size;
+	Input.NotificationType = Notify->Type;
+
+	if(Input.NotificationType == RIO_NOTIFY_EVENT)
+	{
+		Input.Event.EventHandle = Notify->Event.EventHandle;
+		Input.Event.NotifyReset = Notify->Event.NotifyReset;
+	}
+
+	else
+	{
+		Input.IOCP.PortHandle = Notify->IOCP.PortHandle;
+		Input.IOCP.Context = Notify->IOCP.Context;
+		Input.IOCP.IoStatusBlock = Notify->IOCP.IoStatusBlock;
+	}
+
+	Input.AllocationSize = sizeof(RIO_RING) + Input.RingSize * sizeof(RIO_COMPLETION_ENTRY);
+	Input.Ring = Ring;
+
+	return NtDeviceIoControlFile(RioRegDomain, NULL, NULL, NULL, &IoStatus, IOCTL_AFD_RIO, &Input, sizeof(Input), RingId, sizeof(*RingId));
+}
+
+/*
+ * NxRegisterRequestRing
+ * 
+ */
+NTSTATUS NxRegisterRequestRing
+(
+	HANDLE Socket,
+	PVOID TxRing,
+	ULONG TxRingSize,
+	ULONG TxCompletionRingId,
+	PVOID RxRing,
+	ULONG RxRingSize,
+	ULONG RxCompletionRingId,
+	PVOID Context
+)
+{
+	AFD_RIO_RQ_REGISTER_IN Input;
+	IO_STATUS_BLOCK IoStatus;
+
+	Input.Operation = AFD_RIO_RQ_REGISTER;
+	Input.SendCompletionQueueId = TxCompletionRingId;
+	Input.ReceiveCompletionQueueId = RxCompletionRingId;
+	Input.SendQueueSize = TxRingSize;
+	Input.SendAllocationSize = sizeof(RIO_RING) + TxRingSize * sizeof(RIO_REQUEST_ENTRY);
+	Input.SendRingPtr = TxRing;
+	Input.ReceiveQueueSize = RxRingSize;
+	Input.ReceiveAllocationSize = sizeof(RIO_RING) + RxRingSize * sizeof(RIO_REQUEST_ENTRY);
+	Input.ReceiveRingPtr = RxRing;
+	Input.RioDomainHandle = RioRegDomain;
+	Input.Context = Context;
+
+	return NtDeviceIoControlFile(Socket, NULL, NULL, NULL, &IoStatus, IOCTL_AFD_RIO, &Input, sizeof(Input), 0, 0);
 }
