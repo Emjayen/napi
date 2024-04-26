@@ -97,13 +97,6 @@ struct RIO_NOTIFY
 	};
 };
 
-// Ring control area
-__declspec(align(16)) struct RIO_RING
-{
-	ULONG Head;
-	ULONG Tail;
-};
-
 // Buffer descriptor
 struct RIO_BUF
 {
@@ -131,6 +124,27 @@ struct RIO_COMPLETION_ENTRY
 	ULONG Information;
 	PVOID64 Context;
 	PVOID64 RequestContext;
+};
+
+// Ring control area
+__declspec(align(16)) struct RIO_RING
+{
+	ULONG Head;
+	ULONG Tail;
+};
+
+// Request ring layout.
+struct RIO_REQUEST_QUEUE
+{
+	RIO_RING Hdr;
+	RIO_REQUEST_ENTRY Ring[];
+};
+
+// Completion ring layout
+struct RIO_COMPLETION_QUEUE
+{
+	RIO_RING Hdr;
+	RIO_COMPLETION_ENTRY Ring[];
 };
 
 // SGIO buffer descriptor
@@ -175,8 +189,9 @@ NTSTATUS NxSocket
  *   [in] 'Share'         -- Address sharing mode; see: BIND_SHARE_*
  * 
  * Return:
- *    On success returns STATUS_SUCCESS, elsewise returns an error status code.
- *
+ *    On success the return value is zero, elsewise on failure the return value is a status
+ *    code indicating the error condition.
+ *    
  */
 NTSTATUS NxBind
 (
@@ -281,6 +296,22 @@ NTSTATUS NxSetOption
 );
 
 
+/*
+ * NxIoControl
+ *
+ */
+NTSTATUS NxIoControl
+(
+	HANDLE Socket,
+	IO_STATUS_BLOCK* IoStatus,
+	ULONG IoControlCode,
+	PVOID InputBuffer,
+	ULONG InputLength,
+	PVOID OutputBuffer,
+	ULONG OutputLength,
+	ULONG* OutputReturnedLength
+);
+
 
 
 
@@ -376,3 +407,19 @@ NTSTATUS NxRegisterRequestRing
 	ULONG RxCompletionRingId,
 	PVOID Context
 );
+
+
+/*
+ * NxPokeTx
+ *   Submits accumulated send operations in the provided socket's transmit ring.
+ *
+ */
+NTSTATUS NxPokeTx(HANDLE Socket);
+
+
+/*
+ * NxPokeRx
+ *   Submits accumulated receive operations in the provided socket's receive ring.
+ *
+ */
+NTSTATUS NxPokeRx(HANDLE Socket);

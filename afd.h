@@ -7,16 +7,39 @@
 
 
 
+struct AFD_TRANSPORT_IOCTL_IN
+{
+	ULONG Type;
+	ULONG Unused;
+	BOOLEAN Flag;
+	ULONG IoControlCode;
+	PVOID InputBuffer;
+	ULONGLONG InputLength;
+};
+
+
+//struct AFD_TDI_OPT_DATA
+//{
+//	BOOLEAN Unk1; // TRUE
+//	ULONG Level;
+//	ULONG Name;
+//	ULONG Unk2; // TRUE
+//	VOID* Value;
+//	ULONG Length;
+//};
+
 // AFD commands
 #define AFD_BIND			0
 #define AFD_CONNECT			1
 #define AFD_START_LISTEN	2
+#define AFD_ACCEPT          3
+#define AFD_RECEIVE         4
 #define AFD_RECV			5
 #define AFD_SEND			7
 #define AFD_SEND_DATAGRAM   8
 #define AFD_SET_INFO        14
 #define AFD_ACCEPTEX        32
-#define AFD_SET_TDI_OPT     47 // Internally TdiSetInformationEx
+#define AFD_TRANSPORT_IOCTL 47
 #define AFD_CONNECTEX       49
 #define AFD_RIO             70
 
@@ -49,8 +72,8 @@
 #define IOCTL_AFD_ACCEPTEX \
   _AFD_CONTROL_CODE(AFD_ACCEPTEX, METHOD_NEITHER)
 
-#define IOCTL_AFD_SET_TDI_OPT \
-  _AFD_CONTROL_CODE(AFD_SET_TDI_OPT, METHOD_NEITHER)
+#define IOCTL_AFD_TRANSPORT_IOCTL \
+  _AFD_CONTROL_CODE(AFD_TRANSPORT_IOCTL, METHOD_NEITHER)
 
 #define IOCTL_AFD_CONNECTEX \
   _AFD_CONTROL_CODE(AFD_CONNECTEX, METHOD_NEITHER)
@@ -131,6 +154,36 @@
 #define TDI_ADDRESS_TYPE_IP6       ((USHORT) 23) // IP version 6
 #define TDI_ADDRESS_TYPE_NETBIOS_UNICODE_EX       ((USHORT)24) // WCHAR Netbios address
 
+// Endpoint flags.
+#define AFD_ENDPOINT_FLAG_CONNECTIONLESS	0x00000001
+#define AFD_ENDPOINT_FLAG_MESSAGEMODE		0x00000010
+#define AFD_ENDPOINT_FLAG_RAW			    0x00000100
+#define AFD_ENDPOINT_FLAG_REGISTERED_IO     0x10000000
+
+//
+// Old AFD_ENDPOINT_TYPE mappings. Flags make things clearer at
+// at the TDI level and after all Winsock2 switched to provider flags
+// instead of socket type anyway (ATM for example needs connection oriented
+// raw sockets, which can only be reflected by SOCK_RAW+SOCK_STREAM combination
+// which does not exists).
+//
+#define AfdEndpointTypeStream			0
+#define AfdEndpointTypeDatagram			(AFD_ENDPOINT_FLAG_CONNECTIONLESS|\
+                                            AFD_ENDPOINT_FLAG_MESSAGEMODE)
+#define AfdEndpointTypeRaw				(AFD_ENDPOINT_FLAG_CONNECTIONLESS|\
+                                            AFD_ENDPOINT_FLAG_MESSAGEMODE|\
+                                            AFD_ENDPOINT_FLAG_RAW)
+#define AfdEndpointTypeSequencedPacket	(AFD_ENDPOINT_FLAG_MESSAGEMODE)
+#define AfdEndpointTypeReliableMessage	(AFD_ENDPOINT_FLAG_MESSAGEMODE)
+
+//
+// New multipoint semantics
+//
+#define AFD_ENDPOINT_FLAG_MULTIPOINT	    0x00001000
+#define AFD_ENDPOINT_FLAG_CROOT			    0x00010000
+#define AFD_ENDPOINT_FLAG_DROOT			    0x00100000
+
+
 // AFD device name.
 #define AFD_DEVICE_NAME  L"\\Device\\Afd\\Endpoint"
 
@@ -208,7 +261,7 @@ struct AFD_INFO_DATA
 	} Information;
 };
 
-struct AFD_TDI_OPT_DATA
+struct AFD_TR
 {
 	BOOLEAN Unk1; // TRUE
 	ULONG Level;
@@ -246,7 +299,15 @@ struct AFD_RECV_DATA
 #define AFD_RIO_RQ_REGISTER 3
 #define AFD_RIO_REGISTER    4
 #define AFD_RIO_DEREGISTER  5
-#define AFD_RIO_POKE        6
+#define AFD_RIO_TX_POKE     6
+#define AFD_RIO_RX_POKE     7
+
+
+struct AFD_RIO_POKE_IN
+{
+	ULONG Operation;
+};
+
 
 struct AFD_RIO_REGISTER_IN
 {
@@ -298,14 +359,3 @@ struct AFD_RIO_RQ_REGISTER_IN
 	PVOID Context;
 };
 
-
-struct RIO_REQUEST_QUEUE
-{
-	ULONG Magic;
-	ULONG Unused;
-	BOOL UnkFromParam3;
-	ULONG SendQueueSize;
-	ULONG ReceiveQueueSize;
-	PVOID SendRingPtr;
-	PVOID ReceiveRingPtr;
-};

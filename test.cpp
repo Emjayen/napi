@@ -117,6 +117,94 @@ void DemoAccept()
 }
 
 
+void RioDemo()
+{
+	NTSTATUS Status;
+	HANDLE Socket;
+	sockaddr_in sa;
+	ULONG IoRegionId;
+	ULONG CompletionRingId;
+	HANDLE CompletionQueueEvent;
+	BYTE* IoRegion;
+	RIO_COMPLETION_QUEUE* CompletionQueue;
+	RIO_REQUEST_QUEUE* TxRequestQueue;
+	RIO_REQUEST_QUEUE* RxRequestQueue;
+
+	// Required global initialization for RIO usage.
+	NxEnableRegisteredIo();
+
+	// Create RIO-enabled socket.
+	NxSocket(AF_INET, IPPROTO_UDP, SOCK_FLAG_RIO, &Socket);
+
+	sa.Family = AF_INET;
+	sa.Address = 0;
+	sa.Port = htons(7755);
+
+	NxBind(Socket, (sockaddr*) &sa, sizeof(sa), BIND_SHARE_NORMAL);
+
+	// Queue (ring) sizes.
+	const auto IO_REGION_SZ = 0x10000;
+	const auto TX_RING_SZ = 1025;
+	const auto RX_RING_SZ = 1025;
+	const auto CQ_RING_SZ = TX_RING_SZ + RX_RING_SZ;
+
+	// Register region of memory from which I/O buffers will be allocated.
+	IoRegion = (BYTE*) VirtualAlloc(NULL, 0x2000, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+
+	Status = NxRegisterIoRegion(IoRegion, 0x2000, &IoRegionId);
+
+	// Register completion queue, requesting event-based notification for insertions by the kernel.
+	CompletionQueue = (RIO_COMPLETION_QUEUE*) VirtualAlloc(NULL, sizeof(RIO_COMPLETION_QUEUE) + CQ_RING_SZ * sizeof(RIO_COMPLETION_ENTRY), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+
+	RIO_NOTIFY Notify;
+	Notify.Type = RIO_NOTIFY_EVENT;
+	Notify.Event.EventHandle = (CompletionQueueEvent = CreateEvent(NULL, TRUE, FALSE, NULL));
+	Notify.Event.NotifyReset = FALSE;
+
+	Status = NxRegisterCompletionRing(CompletionQueue, CQ_RING_SZ, &Notify, &CompletionRingId);
+
+	// Register request queue pair, routing notifications for both rx/tx to our singular completion queue.
+	TxRequestQueue = (RIO_REQUEST_QUEUE*) VirtualAlloc(NULL, sizeof(RIO_REQUEST_QUEUE) + sizeof(RIO_REQUEST_ENTRY) * TX_RING_SZ, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+	RxRequestQueue = (RIO_REQUEST_QUEUE*) VirtualAlloc(NULL, sizeof(RIO_REQUEST_QUEUE) + sizeof(RIO_REQUEST_ENTRY) * RX_RING_SZ, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+
+
+	Status = NxRegisterRequestRing(Socket, TxRequestQueue, TX_RING_SZ, CompletionRingId, RxRequestQueue, RX_RING_SZ, CompletionRingId, NULL);
+
+
+
+	RIO_REQUEST_ENTRY& Entry = TxRequestQueue->Ring[TxRequestQueue->Hdr.Head];
+
+
+#define DATAGRAM_DATA  "TestDat"
+
+
+
+	auto pd = IoRegion;
+
+	memcpy(pd, DATAGRAM_DATA, sizeof(DATAGRAM_DATA));
+
+	Entry.Data.RegionId = IoRegionId;
+	Entry.Data.Offset = pd - IoRegion;
+	Entry.Data.Length = sizeof(DATAGRAM_DATA);
+	pd += Entry.Data.Length;
+
+	sa.Address = 0x08080808;
+
+	memcpy(pd, &sa, sizeof(sa));
+
+	Entry.RemoteAddr.RegionId = IoRegionId;
+	Entry.RemoteAddr.Offset = pd - IoRegion;
+	Entry.RemoteAddr.Length = 28;
+	pd += Entry.RemoteAddr.Length;
+
+	TxRequestQueue->Hdr.Tail++;
+
+	Status = NxPokeTx(Socket);
+
+	Sleep(1000);
+}
+	
+
 void main()
 {
 	// Currently NAPI only exposes support for IOCP-based IRP completion notification, as the expected use-case is 
@@ -127,23 +215,8 @@ void main()
 	//DemoAccept();
 	//DemoConnect();
 
-	auto r = NxEnableRegisteredIo();
+	RioDemo();
+	
 
 
-	void* Region = VirtualAlloc(NULL, 0x2000, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-
-	ULONG RegionId;
-	auto res = NxRegisterIoRegion(Region, 0x2000, &RegionId);
-
-
-	RIO_NOTIFY Notify;
-	Notify.Type = RIO_NOTIFY_EVENT;
-	Notify.Event.EventHandle = CreateEvent(NULL, TRUE, FALSE, NULL);
-	Notify.Event.NotifyReset = FALSE;
-
-	void* Ring = VirtualAlloc(NULL, sizeof(RIO_RING) + 1024 * sizeof(RIO_COMPLETION_ENTRY), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-
-	ULONG RingId = 0xDDEE;
-
-	auto Status = NxRegisterCompletionRing(Ring, 1024, &Notify, &RingId);
 }
