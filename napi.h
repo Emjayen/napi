@@ -3,49 +3,50 @@
  *
  */
 #pragma once
+#pragma warning(disable:4200)
 #include "nt/nt.h"
+#include <ws2def.h>
+#include <mstcpip.h>
 
 
 
 
 
- // Protocols.
-#define MAKE_SOCKET_PROTOCOL(type, proto) ((((ULONG) type) << 16) | ((ULONG) proto))
+//
+// Socket types
+//
+#define __MAKE_SOCKET_PARAMS(type, proto) ((ULONG(type) << 16) | ULONG(proto))
+#define __SOCKET_PARAMS_GET_TYPE(params) (params >> 16)
+#define __SOCKET_PARAMS_GET_PROTO(params) (params & 0xFFFF)
+#define SOCK_UDP __MAKE_SOCKET_PROTOCOL(SOCK_DGRAM, IPPROTO_UDP)
+#define SOCK_TCP __MAKE_SOCKET_PROTOCOL(SOCK_STREAM, IPPROTO_TCP)
 
-#define AF_INET  2
 
-#define SOCK_STREAM  1
-#define SOCK_DGRAM   2
-
-#define SOL_SOCKET   0xFFFF
-
-#define IP_P_UDP  17
-#define IP_P_TCP  6
-
-#define IPPROTO_UDP  MAKE_SOCKET_PROTOCOL(SOCK_DGRAM, IP_P_UDP)
-#define IPPROTO_TCP  MAKE_SOCKET_PROTOCOL(SOCK_STREAM, IP_P_TCP)
-
+//
 // Socket options
-#define MAKE_SOCKET_OPTION(level, option) ((((ULONG) level) << 16) | ((ULONG) option))
+//
+#define __MAKE_SOCKET_OPTION(level, name) ((ULONG(level) << 16) | ULONG(name))
+#define __SOCKET_OPTION_GET_LEVEL(params) (params >> 16)
+#define __SOCKET_OPTION_GET_NAME(params) (params & 0xFFFF)
 
 // SOL_SOCKET
-#define SO_SNDBUF MAKE_SOCKET_OPTION(SOL_SOCKET, 0x1001)
-#define SO_RCVBUF MAKE_SOCKET_OPTION(SOL_SOCKET, 0x1002)
+#undef SO_SNDBUF
+#define SO_SNDBUF __MAKE_SOCKET_OPTION(SOL_SOCKET, 0x1001)
+#undef SO_RCVBUF
+#define SO_RCVBUF __MAKE_SOCKET_OPTION(SOL_SOCKET, 0x1002)
 
 // IPPROTO_TCP
-#define TCP_NAGLE MAKE_SOCKET_OPTION(IPPROTO_TCP, 0x0001)
+#undef TCP_NODELAY
+#define TCP_NODELAY  MAKE_SOCKET_OPTION(IPPROTO_TCP, 0x0001)
 
-// Do not reuse address if already in use but allow subsequent reuse by others
-#define BIND_SHARE_NORMAL	  0
 
-// Reuse address if necessary
-#define BIND_SHARE_REUSE	  1
-
-// Address is a wildcard, no checking.
-#define BIND_SHARE_WILDCARD   2
-
-// Do not allow reuse of this address (admin only).
-#define BIND_SHARE_EXCLUSIVE  3
+//
+// Bind dispositions
+//
+#define BIND_SHARE_NORMAL	  0 /* Do not reuse address if already in use but allow subsequent reuse by others */
+#define BIND_SHARE_REUSE	  1 /* Reuse address if necessary */
+#define BIND_SHARE_WILDCARD   2 /* Address is a wildcard, no checking. */
+#define BIND_SHARE_EXCLUSIVE  3 /* Do not allow reuse of this address (elevated token required). */
 
 // Reserved trailing buffer size for address control information returned from NxAccept operations.
 #define MAX_NETWORK_ADDRESS_SZ   32
@@ -55,22 +56,9 @@
 #define SOCK_FLAG_RIO  (1<<0) /* Enable support for Registered I/O with this socket. */
 
 
-// Network address
-struct sockaddr
-{
-	USHORT Family;
-	BYTE Data[14];
-};
-
-struct sockaddr_in
-{
-	USHORT Family;
-	USHORT Port;
-	ULONG Address;
-	BYTE Zero[8];
-};
-
-// Registered I/O datastructures
+//
+// Registered I/O
+//
 
 // Completion notification parameters
 #define RIO_NOTIFY_EVENT  1
@@ -312,12 +300,6 @@ NTSTATUS NxIoControl
 	ULONG* OutputReturnedLength
 );
 
-
-
-
-//
-// Registered I/O
-//
 
 /*
  * NxEnableRegisteredIo

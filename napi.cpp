@@ -18,10 +18,6 @@ static HANDLE RioRegDomain;
  * NxSocket
  *
  */
-#define GET_PROTO_TYPE(proto) (proto >> 16)
-#define GET_PROTO_PROTO(proto) (proto & 0xFFFF)
-
-
 NTSTATUS NxSocket
 (
 	USHORT Family,
@@ -30,38 +26,35 @@ NTSTATUS NxSocket
 	HANDLE* hSocketHandle
 )
 {
+	AFD_OPEN_IN AfdOpen;
 	UNICODE_STRING DevName;
 	OBJECT_ATTRIBUTES ObjAttr;
-	AFD_CREATE AfdCreate;
 	IO_STATUS_BLOCK IoStatus;
-
 
 
 	RtlInitUnicodeString(&DevName, AFD_DEVICE_NAME);
 	InitializeObjectAttributes(&ObjAttr, &DevName, OBJ_CASE_INSENSITIVE | OBJ_INHERIT, 0, 0);
 
-	AfdCreate.Ea.NextEntryOffset = 0;
-	AfdCreate.Ea.Flags = 0;
-	AfdCreate.Ea.EaNameLength = sizeof(AfdOpenPacket)-1;
-	AfdCreate.Ea.EaValueLength = 30;
-	memcpy(AfdCreate.Ea.EaName, AfdOpenPacket, sizeof(AfdOpenPacket));
-
-	AfdCreate.EndpointFlags = Flags & SOCK_FLAG_RIO ? AFD_ENDPOINT_FLAG_REGISTERED_IO : 0;
-	AfdCreate.GroupID = 0;
-	AfdCreate.AddressFamily = Family;
-	AfdCreate.SocketType = GET_PROTO_TYPE(Protocol);
-	AfdCreate.Protocol = GET_PROTO_PROTO(Protocol);
-	AfdCreate.SizeOfTdiName = 0;
-
-	// TODO:
-	//AfdCreate.EndpointFlags |= AfdEndpointTypeDatagram;
-
-	return NtCreateFile(hSocketHandle, GENERIC_READ | GENERIC_WRITE | SYNCHRONIZE, &ObjAttr, &IoStatus, NULL, NULL, FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN_IF, 0, &AfdCreate, sizeof(AfdCreate));
+	AfdOpen.Ea.NextEntryOffset = 0;
+	AfdOpen.Ea.Flags = 0;
+	AfdOpen.Ea.EaNameLength = sizeof(AFD_OPEN_PACKET)-1;
+	AfdOpen.Ea.EaValueLength = 30;
+	memcpy(AfdOpen.Ea.EaName, AFD_OPEN_PACKET, sizeof(AFD_OPEN_PACKET));
+	AfdOpen.GroupID = 0;
+	AfdOpen.AddressFamily = Family;
+	AfdOpen.SocketType = __SOCKET_PARAMS_GET_TYPE(Protocol);
+	AfdOpen.Protocol = __SOCKET_PARAMS_GET_PROTO(Protocol);
+	AfdOpen.SizeOfTdiName = 0;
+	AfdOpen.EndpointFlags = 0;
+	
+	if(AfdOpen.SocketType != SOCK_STREAM)
+		AfdOpen.EndpointFlags |= AfdEndpointTypeDatagram;
+	
+	if(Flags & SOCK_FLAG_RIO)
+		AfdOpen.EndpointFlags |= AFD_ENDPOINT_FLAG_REGISTERED_IO;
+	
+	return NtCreateFile(hSocketHandle, GENERIC_READ | GENERIC_WRITE | SYNCHRONIZE, &ObjAttr, &IoStatus, NULL, NULL, FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN_IF, 0, &AfdOpen, sizeof(AfdOpen));
 }
-
-
-
-
 
 
 /*
@@ -222,14 +215,10 @@ NTSTATUS NxReceive
 }
 
 
-
 /*
  * NxSetOption
  *
  */
-#define OPT_GET_LEVEL(opt) (opt >> 16)
-#define OPT_GET_NAME(opt) (opt & 0xFFFF)
-
 NTSTATUS NxSetOption
 (
 	HANDLE hSocket,
@@ -239,7 +228,8 @@ NTSTATUS NxSetOption
 {
 	union
 	{
-		AFD_INFO_DATA Info;
+		AFD_INFORMATION AfdInfo;
+		AFD_TRANSPORT_IOCTL_IN TransportIoctl;
 		BYTE Input[1];
 	};
 
@@ -253,26 +243,34 @@ NTSTATUS NxSetOption
 			ULONG InputLength;
 		};
 	};
-
-	NTSTATUS Status;
-
+		
 	switch(Option)
 	{
 		case SO_RCVBUF:
 		case SO_SNDBUF:
 		{
-			Info.InformationType = Option == SO_RCVBUF ? AFD_RECEIVE_WINDOW_SIZE : AFD_SEND_WINDOW_SIZE;
-			Info.Information.Ulong = Value;
+			AfdInfo.InformationType = Option == SO_RCVBUF ? AFD_RECEIVE_WINDOW_SIZE : AFD_SEND_WINDOW_SIZE;
+			AfdInfo.Information.Ulong = Value;
 
 			Ioctl = IOCTL_AFD_SET_INFO;
-			InputLength = sizeof(Info);
+			InputLength = sizeof(AfdInfo);
 		} break;
+
+		default:
+		{
+			TransportIoctl.Mode = AFD_TLI_WRITE;
+			TransportIoctl.Level = __SOCKET_OPTION_GET_LEVEL(Option);
+			TransportIoctl.IoControlCode = __SOCKET_OPTION_GET_NAME(Option);
+			TransportIoctl.Flag = TRUE;
+			TransportIoctl.InputBuffer = &Value;
+			TransportIoctl.InputLength = sizeof(ULONG);
+
+			Ioctl = IOCTL_AFD_TRANSPORT_IOCTL;
+			InputLength = sizeof(TransportIoctl);
+		}
 	}
 
-	if((Status = NtDeviceIoControlFile(hSocket, NULL, NULL, NULL, &IoStatus, Ioctl, Input, InputLength, NULL, NULL)) == STATUS_PENDING)
-		Status = IoStatus.Status;
-
-	return Status;
+	return NtDeviceIoControlFile(hSocket, NULL, NULL, NULL, &IoStatus, Ioctl, Input, InputLength, NULL, NULL);
 }
 
 
@@ -299,10 +297,10 @@ NTSTATUS NxIoControl
 	if(!IoStatus)
 		IoStatus = &ISB;
 
-	Input.Type = 3;
-	Input.Unused = 0;
-	Input.Flag = TRUE;
+	Input.Mode = AFD_TLI_READ | AFD_TLI_WRITE;
+	Input.Level = 0;
 	Input.IoControlCode = IoControlCode;
+	Input.Flag = TRUE;
 	Input.InputBuffer = InputBuffer;
 	Input.InputLength = InputLength;
 
@@ -315,8 +313,6 @@ NTSTATUS NxIoControl
 
 	return Status;
 }
-
-#define AFD_RIO_CREATE_PACKET  "AfdRioRDOpenPacket"
 
 
 /*
@@ -332,7 +328,7 @@ NTSTATUS NxEnableRegisteredIo()
 	union
 	{
 		FILE_FULL_EA_INFORMATION Ea;
-		BYTE __pad[sizeof(Ea)-1 + sizeof(AFD_RIO_CREATE_PACKET)];
+		BYTE __pad[sizeof(Ea) - alignof(FILE_FULL_EA_INFORMATION) + sizeof(AFD_RIO_OPEN_PACKET)];
 	} AfdCreate;
 
 	RtlInitUnicodeString(&DevName, AFD_RIO_DEVICE_NAME);
@@ -340,9 +336,9 @@ NTSTATUS NxEnableRegisteredIo()
 
 	AfdCreate.Ea.NextEntryOffset = 0;
 	AfdCreate.Ea.Flags = 0;
-	AfdCreate.Ea.EaNameLength = sizeof(AFD_RIO_CREATE_PACKET)-1;
+	AfdCreate.Ea.EaNameLength = sizeof(AFD_RIO_OPEN_PACKET)-1;
 	AfdCreate.Ea.EaValueLength = 0;
-	memcpy(AfdCreate.Ea.EaName, AFD_RIO_CREATE_PACKET, sizeof(AFD_RIO_CREATE_PACKET));
+	memcpy(AfdCreate.Ea.EaName, AFD_RIO_OPEN_PACKET, sizeof(AFD_RIO_OPEN_PACKET));
 
 	return NtCreateFile(&RioRegDomain, GENERIC_READ | GENERIC_WRITE, &ObjAttr, &IoStatus, NULL, NULL, FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN_IF, 0, &AfdCreate, sizeof(AfdCreate));
 }
@@ -383,18 +379,6 @@ NTSTATUS NxRegisterCompletionRing
 	ULONG* RingId
 )
 {
-	/* Untitled2 (26/04/2024 9:33:10 PM)
-StartOffset(h): 00000000, EndOffset(h): 00000037, Length(h): 00000038 */
-
-	unsigned char rawData[56] = {
-		0x00, 0x00, 0x00, 0x00, 0x01, 0x08, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
-		0xFA, 0x7F, 0x00, 0x00, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x70, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x28, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x50, 0x07, 0xD4, 0xF4, 0x01, 0x02, 0x00, 0x00
-	};
-
-
 	AFD_RIO_CQ_REGISTER_IN Input;
 	IO_STATUS_BLOCK IoStatus;
 
@@ -418,12 +402,6 @@ StartOffset(h): 00000000, EndOffset(h): 00000037, Length(h): 00000038 */
 	Input.AllocationSize = sizeof(RIO_RING) + Input.RingSize * sizeof(RIO_COMPLETION_ENTRY);
 	Input.Ring = Ring;
 
-
-	//AFD_RIO_CQ_REGISTER_IN test = {};
-	//memcpy(&test, rawData, sizeof(test));
-
-
-
 	return NtDeviceIoControlFile(RioRegDomain, NULL, NULL, NULL, &IoStatus, IOCTL_AFD_RIO, &Input, sizeof(Input), RingId, sizeof(*RingId));
 }
 
@@ -443,22 +421,6 @@ NTSTATUS NxRegisterRequestRing
 	PVOID Context
 )
 {
-
-	/* Untitled1 (26/04/2024 8:36:19 PM)
-   StartOffset(h): 00000000, EndOffset(h): 0000003F, Length(h): 00000040 */
-
-	unsigned char rawData[64] = {
-		0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x01, 0x04, 0x00, 0x00, 0x58, 0x20, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x80, 0xC7, 0xD4, 0xF4, 0x01, 0x02, 0x00, 0x00, 0x01, 0x04, 0x00, 0x00,
-		0x58, 0x20, 0x01, 0x00, 0xD8, 0xE7, 0xD5, 0xF4, 0x01, 0x02, 0x00, 0x00,
-		0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00
-	};
-
-
-
-
 	AFD_RIO_RQ_REGISTER_IN Input;
 	IO_STATUS_BLOCK IoStatus;
 
@@ -473,9 +435,6 @@ NTSTATUS NxRegisterRequestRing
 	Input.ReceiveRingPtr = RxRing;
 	Input.RioDomainHandle = RioRegDomain;
 	Input.Context = Context;
-
-	//ZeroMemory(&Input, sizeof(Input));
-	//memcpy(&Input, rawData, sizeof(rawData));
 
 	return NtDeviceIoControlFile(Socket, NULL, NULL, NULL, &IoStatus, IOCTL_AFD_RIO, &Input, sizeof(Input), 0, 0);
 }

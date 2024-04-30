@@ -31,14 +31,14 @@ void DemoConnect()
 	CreateIoCompletionPort(hSocket, hIOCP, 0, 0);
 
 	sockaddr_in sa;
-	sa.Family = AF_INET;
-	sa.Address = 0;
-	sa.Port = 0;
+	sa.sin_family = AF_INET;
+	sa.sin_addr.s_addr = 0;
+	sa.sin_port = 0;
 
-	Status = NxBind(hSocket, (sockaddr*) &sa, sizeof(sa), BIND_SHARE_NORMAL);
+	NxBind(hSocket, (sockaddr*) &sa, sizeof(sa), BIND_SHARE_NORMAL);
 
-	sa.Port = htons(80);
-	sa.Address = '\x8E\xFA\x42\xCE'; // google.com
+	sa.sin_port = htons(80);
+	sa.sin_addr.s_addr = '\x8E\xFA\x42\xCE'; // google.com
 
 	if((Status = NxConnect(hSocket, &ISB, (sockaddr*) &sa, sizeof(sa))) != STATUS_PENDING)
 	{
@@ -78,15 +78,15 @@ void DemoAccept()
 	HANDLE hAccept;
 
 
-	//NxSocket(AF_INET, IPPROTO_TCP, &hSocket);
-	//NxSocket(AF_INET, IPPROTO_TCP, &hAccept);
+	NxSocket(AF_INET, IPPROTO_TCP, 0, &hSocket);
+	NxSocket(AF_INET, IPPROTO_TCP, 0, &hAccept);
 
 	CreateIoCompletionPort(hSocket, hIOCP, 0, 0);
 
 	sockaddr_in sa;
-	sa.Family = AF_INET;
-	sa.Address = 0;
-	sa.Port = htons(8888);
+	sa.sin_family = AF_INET;
+	sa.sin_addr.s_addr = 0;
+	sa.sin_port = htons(8888);
 
 	NxBind(hSocket, (sockaddr*) &sa, sizeof(sa), BIND_SHARE_EXCLUSIVE);
 	NxListen(hSocket, 0);
@@ -136,9 +136,9 @@ void RioDemo()
 	// Create RIO-enabled socket.
 	NxSocket(AF_INET, IPPROTO_UDP, SOCK_FLAG_RIO, &Socket);
 
-	sa.Family = AF_INET;
-	sa.Address = 0;
-	sa.Port = htons(7755);
+	sa.sin_family = AF_INET;
+	sa.sin_addr.s_addr = 0;
+	sa.sin_port = htons(7755);
 
 	NxBind(Socket, (sockaddr*) &sa, sizeof(sa), BIND_SHARE_NORMAL);
 
@@ -188,7 +188,7 @@ void RioDemo()
 	Entry.Data.Length = sizeof(DATAGRAM_DATA);
 	pd += Entry.Data.Length;
 
-	sa.Address = 0x08080808;
+	sa.sin_addr.s_addr = 0x08080808;
 
 	memcpy(pd, &sa, sizeof(sa));
 
@@ -199,14 +199,20 @@ void RioDemo()
 
 	TxRequestQueue->Hdr.Tail++;
 
+
+
+
 	Status = NxPokeTx(Socket);
 
 	Sleep(1000);
 }
-	
+
+
 
 void main()
 {
+
+
 	// Currently NAPI only exposes support for IOCP-based IRP completion notification, as the expected use-case is 
 	// for server software.
 	hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);

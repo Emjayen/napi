@@ -9,13 +9,17 @@
 
 struct AFD_TRANSPORT_IOCTL_IN
 {
-	ULONG Type;
-	ULONG Unused;
-	BOOLEAN Flag;
+	ULONG Mode;
+	ULONG Level;
 	ULONG IoControlCode;
+	ULONG Flag;
 	PVOID InputBuffer;
 	ULONGLONG InputLength;
 };
+
+
+#define AFD_TLI_WRITE  1
+#define AFD_TLI_READ   2
 
 
 //struct AFD_TDI_OPT_DATA
@@ -186,23 +190,20 @@ struct AFD_TRANSPORT_IOCTL_IN
 
 // AFD device name.
 #define AFD_DEVICE_NAME  L"\\Device\\Afd\\Endpoint"
+#define AFD_OPEN_PACKET "AfdOpenPacketXX"
 
 // AFD RIO registration device name
 #define AFD_RIO_DEVICE_NAME  L"\\Device\\Afd\\RioRegDomain"
+#define AFD_RIO_OPEN_PACKET  "AfdRioRDOpenPacket"
 
-struct AFD_CREATE
+
+struct AFD_OPEN_IN
 {
-#define AfdOpenPacket "AfdOpenPacketXX"
-
-	// FILE_FULL_EA_INFORMATION
-	struct
+	union
 	{
-		ULONG NextEntryOffset;
-		UCHAR Flags;
-		UCHAR EaNameLength;
-		USHORT EaValueLength;
-		CHAR EaName[16];
-	} Ea;
+		FILE_FULL_EA_INFORMATION Ea;
+		BYTE EaPadding[sizeof(Ea) - alignof(FILE_FULL_EA_INFORMATION) + sizeof(AFD_OPEN_PACKET)];
+	};
 
 	ULONG EndpointFlags;
 	ULONG GroupID;
@@ -212,8 +213,6 @@ struct AFD_CREATE
 	ULONG SizeOfTdiName;
 	CHAR TdiName[9];
 };
-
-
 
 
 struct AFD_BIND_DATA
@@ -249,7 +248,7 @@ struct AFD_ACCEPTEX_DATA
 	ULONG RemoteAddressLength;
 };
 
-struct AFD_INFO_DATA
+struct AFD_INFORMATION
 {
 	ULONG InformationType;
 
@@ -260,17 +259,6 @@ struct AFD_INFO_DATA
 		LARGE_INTEGER LargeInteger;
 	} Information;
 };
-
-struct AFD_TR
-{
-	BOOLEAN Unk1; // TRUE
-	ULONG Level;
-	ULONG Name;
-	ULONG Unk2; // TRUE
-	VOID* Value;
-	ULONG Length;
-};
-
 
 struct AFD_SEND_DATA
 {
