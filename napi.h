@@ -7,6 +7,7 @@
 #include "nt/nt.h"
 #include <ws2def.h>
 #include <mstcpip.h>
+#include <WS2tcpip.h>
 
 
 

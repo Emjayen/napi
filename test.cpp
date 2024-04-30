@@ -199,9 +199,6 @@ void RioDemo()
 
 	TxRequestQueue->Hdr.Tail++;
 
-
-
-
 	Status = NxPokeTx(Socket);
 
 	Sleep(1000);
