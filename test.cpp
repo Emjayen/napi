@@ -26,7 +26,7 @@ void DemoConnect()
 	HANDLE hSocket;
 	
 
-	//NxSocket(AF_INET, IPPROTO_TCP, &hSocket);
+	NxSocket(AF_INET, SOCK_TCP, 0, &hSocket);
 
 	CreateIoCompletionPort(hSocket, hIOCP, 0, 0);
 
@@ -78,8 +78,8 @@ void DemoAccept()
 	HANDLE hAccept;
 
 
-	NxSocket(AF_INET, IPPROTO_TCP, 0, &hSocket);
-	NxSocket(AF_INET, IPPROTO_TCP, 0, &hAccept);
+	NxSocket(AF_INET, SOCK_TCP, 0, &hSocket);
+	NxSocket(AF_INET, SOCK_TCP, 0, &hAccept);
 
 	CreateIoCompletionPort(hSocket, hIOCP, 0, 0);
 
@@ -215,10 +215,10 @@ void main()
 	hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
 
 
-	//DemoAccept();
+	DemoAccept();
 	//DemoConnect();
 
-	RioDemo();
+	//RioDemo();
 	
 
 

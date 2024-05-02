@@ -7,7 +7,7 @@
 #include "nt/nt.h"
 #include <ws2def.h>
 #include <mstcpip.h>
-#include <WS2tcpip.h>
+#include <ws2tcpip.h>
 
 
 
@@ -19,8 +19,8 @@
 #define __MAKE_SOCKET_PARAMS(type, proto) ((ULONG(type) << 16) | ULONG(proto))
 #define __SOCKET_PARAMS_GET_TYPE(params) (params >> 16)
 #define __SOCKET_PARAMS_GET_PROTO(params) (params & 0xFFFF)
-#define SOCK_UDP __MAKE_SOCKET_PROTOCOL(SOCK_DGRAM, IPPROTO_UDP)
-#define SOCK_TCP __MAKE_SOCKET_PROTOCOL(SOCK_STREAM, IPPROTO_TCP)
+#define SOCK_UDP __MAKE_SOCKET_PARAMS(SOCK_DGRAM, IPPROTO_UDP)
+#define SOCK_TCP __MAKE_SOCKET_PARAMS(SOCK_STREAM, IPPROTO_TCP)
 
 
 //

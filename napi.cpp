@@ -309,7 +309,7 @@ NTSTATUS NxIoControl
 	Status = NtDeviceIoControlFile(Socket, NULL, NULL, NULL, IoStatus, AFD_TRANSPORT_IOCTL, &Input, sizeof(Input), OutputBuffer, OutputLength);
 
 	if(OutputReturnedLength)
-		*OutputReturnedLength = IoStatus->Information;
+		*OutputReturnedLength = (ULONG) IoStatus->Information;
 
 	return Status;
 }
