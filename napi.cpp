@@ -306,7 +306,7 @@ NTSTATUS NxIoControl
 
 	IoStatus->Status = STATUS_PENDING;
 
-	Status = NtDeviceIoControlFile(Socket, NULL, NULL, NULL, IoStatus, AFD_TRANSPORT_IOCTL, &Input, sizeof(Input), OutputBuffer, OutputLength);
+	Status = NtDeviceIoControlFile(Socket, NULL, NULL, NULL, IoStatus, IOCTL_AFD_TRANSPORT_IOCTL, &Input, sizeof(Input), OutputBuffer, OutputLength);
 
 	if(OutputReturnedLength)
 		*OutputReturnedLength = (ULONG) IoStatus->Information;

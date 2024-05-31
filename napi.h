@@ -150,7 +150,7 @@ struct NETBUF
  * 
  * Parameters:
  *    [in]  'Family'       -- Specifies the address family; see AF_*
- *    [in]  'Protocol'     -- Specifies the transport protocol; see IP_PROTO_*
+ *    [in]  'Protocol'     -- Specifies the transport protocol; see SOCK_*
  *    [in]  'Flags'        -- Various flags; see SOCK_FLAG_*
  *    [out] 'SocketHandle' -- Receives the resulting socket on success. Undefined on failure.
  *
