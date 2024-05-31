@@ -114,6 +114,9 @@ void DemoAccept()
 	WaitForComplete();
 
 	printf("\nAccept operation complete: 0x%X", ISB.Status);
+
+
+	auto r = NxSetOption(hAccept, TCP_NODELAY, TRUE);
 }
 
 
