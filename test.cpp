@@ -24,7 +24,7 @@ void WaitForComplete()
 void DemoConnect()
 {
 	HANDLE hSocket;
-	
+
 
 	NxSocket(AF_INET, SOCK_TCP, 0, &hSocket);
 
@@ -37,8 +37,14 @@ void DemoConnect()
 
 	NxBind(hSocket, (sockaddr*) &sa, sizeof(sa), BIND_SHARE_NORMAL);
 
-	sa.sin_port = htons(80);
-	sa.sin_addr.s_addr = '\x8E\xFA\x42\xCE'; // google.com
+	union
+	{
+		BYTE a[4];
+		ULONG v;
+	} dst = { 45, 79, 112, 203 };
+
+	sa.sin_port = htons(4242);
+	sa.sin_addr.s_addr = dst.v;
 
 	if((Status = NxConnect(hSocket, &ISB, (sockaddr*) &sa, sizeof(sa))) != STATUS_PENDING)
 	{
@@ -50,7 +56,7 @@ void DemoConnect()
 	printf("Connect operation complete: 0x%X", ISB.Status);
 
 	NETBUF Nb;
-	Nb.Data = (void*) "GET / HTTP/1.1\r\n\r\n\r\n";
+	Nb.Data = (void*) "Echo\r\n";
 	Nb.Length = strlen((const char*) Nb.Data);
 
 	NxSend(hSocket, &ISB, &Nb, 1);
@@ -114,9 +120,6 @@ void DemoAccept()
 	WaitForComplete();
 
 	printf("\nAccept operation complete: 0x%X", ISB.Status);
-
-
-	auto r = NxSetOption(hAccept, TCP_NODELAY, TRUE);
 }
 
 
@@ -216,8 +219,8 @@ void main()
 	hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
 
 
-	DemoAccept();
-	//DemoConnect();
+	//DemoAccept();
+	DemoConnect();
 
 	//RioDemo();
 	

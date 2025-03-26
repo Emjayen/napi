@@ -127,7 +127,7 @@ NTSTATUS NxConnect
 	Connect.Tdi = TRUE;
 	Connect.TdiAddressLength = AddressLength - 2;
 	memcpy(Connect.AddressData, Address, AddressLength);
-
+	
 	IoStatus->Status = STATUS_PENDING;
 
 	return NtDeviceIoControlFile(hSocket, NULL, NULL, IoStatus, IoStatus, IOCTL_AFD_CONNECTEX, &Connect, sizeof(Connect), NULL, NULL);
@@ -214,7 +214,6 @@ NTSTATUS NxReceive
 	return NtDeviceIoControlFile(hSocket, NULL, NULL, IoStatus, IoStatus, IOCTL_AFD_RECV, &Recv, sizeof(Recv), NULL, NULL);
 }
 
-
 /*
  * NxSetOption
  *
@@ -271,6 +270,35 @@ NTSTATUS NxSetOption
 	}
 
 	return NtDeviceIoControlFile(hSocket, NULL, NULL, NULL, &IoStatus, Ioctl, Input, InputLength, NULL, NULL);
+}
+
+
+/*
+ * NxShutdown
+ * 
+ */
+NTSTATUS NxShutdown
+(
+	HANDLE hSocket,
+	ULONG Flags
+)
+{
+	AFD_PARTIAL_DISCONNECT_DATA Input;
+	IO_STATUS_BLOCK IoStatus;
+
+
+	Input.Flags = Flags;
+
+	// This appears to be an artifact of the NT4 days and is ignored by the [emulation] TDI layer
+	// in the kernel. For documentation sake; Winsock does set it to various sentinel values:
+	//
+	// - During a shutdown call -1 is passed. 
+	// - During an implicit abortive disconnect during handle closure zero is passed. This is translated
+	//   at TDI to be zero, thus -1 and 0 are semantically equivilent.
+	//
+	Input.Timeout = 0;
+
+	return NtDeviceIoControlFile(hSocket, NULL, NULL, NULL, &IoStatus, IOCTL_AFD_PARTIAL_DISCONNECT, &Input, sizeof(Input), NULL, 0);
 }
 
 

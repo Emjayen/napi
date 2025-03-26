@@ -7,6 +7,7 @@
 
 
 
+
 struct AFD_TRANSPORT_IOCTL_IN
 {
 	ULONG Mode;
@@ -21,31 +22,21 @@ struct AFD_TRANSPORT_IOCTL_IN
 #define AFD_TLI_WRITE  1
 #define AFD_TLI_READ   2
 
-
-//struct AFD_TDI_OPT_DATA
-//{
-//	BOOLEAN Unk1; // TRUE
-//	ULONG Level;
-//	ULONG Name;
-//	ULONG Unk2; // TRUE
-//	VOID* Value;
-//	ULONG Length;
-//};
-
 // AFD commands
-#define AFD_BIND			0
-#define AFD_CONNECT			1
-#define AFD_START_LISTEN	2
-#define AFD_ACCEPT          3
-#define AFD_RECEIVE         4
-#define AFD_RECV			5
-#define AFD_SEND			7
-#define AFD_SEND_DATAGRAM   8
-#define AFD_SET_INFO        14
-#define AFD_ACCEPTEX        32
-#define AFD_TRANSPORT_IOCTL 47
-#define AFD_CONNECTEX       49
-#define AFD_RIO             70
+#define AFD_BIND			    0
+#define AFD_CONNECT			    1
+#define AFD_START_LISTEN	    2
+#define AFD_ACCEPT              3
+#define AFD_RECEIVE             4
+#define AFD_RECV			    5
+#define AFD_SEND			    7
+#define AFD_SEND_DATAGRAM       8
+#define AFD_PARTIAL_DISCONNECT  10
+#define AFD_SET_INFO            14
+#define AFD_ACCEPTEX            32
+#define AFD_TRANSPORT_IOCTL     47
+#define AFD_CONNECTEX           49
+#define AFD_RIO                 70
 
 // AFD IOCTLs
 #define FSCTL_AFD_BASE   FILE_DEVICE_NETWORK
@@ -81,6 +72,9 @@ struct AFD_TRANSPORT_IOCTL_IN
 
 #define IOCTL_AFD_CONNECTEX \
   _AFD_CONTROL_CODE(AFD_CONNECTEX, METHOD_NEITHER)
+
+#define IOCTL_AFD_PARTIAL_DISCONNECT \
+  _AFD_CONTROL_CODE(AFD_PARTIAL_DISCONNECT, METHOD_NEITHER)
 
 
 // AFD Endpoint information
@@ -279,6 +273,12 @@ struct AFD_RECV_DATA
 	ULONG Unused;
 };
 
+
+struct AFD_PARTIAL_DISCONNECT_DATA
+{
+	ULONG Flags;
+	ULONG64 Timeout;
+};
 
 // Registered I/O Operations
 #define AFD_RIO_CQ_REGISTER 0

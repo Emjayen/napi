@@ -12,7 +12,6 @@
 
 
 
-
 //
 // Socket types
 //
@@ -40,10 +39,7 @@
 #undef TCP_NODELAY
 #define TCP_NODELAY  __MAKE_SOCKET_OPTION(IPPROTO_TCP, 0x0001)
 
-
-//
 // Bind dispositions
-//
 #define BIND_SHARE_NORMAL	  0 /* Do not reuse address if already in use but allow subsequent reuse by others */
 #define BIND_SHARE_REUSE	  1 /* Reuse address if necessary */
 #define BIND_SHARE_WILDCARD   2 /* Address is a wildcard, no checking. */
@@ -55,6 +51,18 @@
 
 // Socket creation flags
 #define SOCK_FLAG_RIO  (1<<0) /* Enable support for Registered I/O with this socket. */
+
+// TODO: AFD internals
+#define AFD_PARTIAL_DISCONNECT_SEND    (1<<0)
+#define AFD_PARTIAL_DISCONNECT_RECEIVE (1<<1)
+#define AFD_ABORTIVE_DISCONNECT        (1<<2)
+#define AFD_UNCONNECT_DATAGRAM         (1<<3)
+
+// Disconnect (shutdown) modes
+#define SHUTDOWN_RECEIVE   AFD_PARTIAL_DISCONNECT_RECEIVE  /* Terminates reception. If there is any pending receive data this causes an abortive termination. */
+#define SHUTDOWN_SEND      AFD_PARTIAL_DISCONNECT_SEND     /* Terminates transmission, initiating a graceful teardown of the virtual circuit. */
+#define SHUTDOWN_ABORTIVE  AFD_ABORTIVE_DISCONNECT         /* Causes an abortive virtual circuit termination. It is not necessary (albeit benign) to specify other flags in conjunction. */
+
 
 
 //
@@ -200,18 +208,37 @@ NTSTATUS NxBind
  *   [in] 'Socket'  -- Handle to the socket to begin listening.
  *   [in] 'Backlog' -- Hint of the internal maximum size of the accept queue. May be zero.
  * 
- * Remarks:
- *   Similarly to socket buffers, the accept queue functions as a fallback for kernel socket
- *   allocations that cannot be serviced by a pending user accept operation.
- *
  * Return:
  *    On success returns STATUS_SUCCESS, elsewise returns an error status code.
+ *
+ * Remarks:
+ *   Similarly to socket buffers, the accept queue functions as a fallback for kernel socket
+ *   allocations that cannot be satisfied by a pending user accept operation.
  *
  */
 NTSTATUS NxListen
 (
 	HANDLE hSocket, 
 	ULONG Backlog
+);
+
+
+/*
+ * NxShutdown
+ *    Controls virtual circuit finalization.
+ *
+ * Parameters:
+ *    [in] 'Socket' -- Handle to the socket to shutdown.
+ *    [in] 'Flags'  -- Flags controlling the shutdown behaviour; see: SHUTDOWN_* 
+ *
+ * Return:
+ *    On success returns STATUS_SUCCESS, elsewise returns an error status code.
+ *
+ */
+NTSTATUS NxShutdown
+(
+	HANDLE hSocket,
+	ULONG Flags
 );
 
 
