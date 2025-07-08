@@ -2,6 +2,11 @@
 #include <stdio.h>
 #include <intrin.h>
 
+//#include <MSWSock.h>
+
+
+
+
 
 #define htons _byteswap_ushort
 
@@ -12,13 +17,15 @@ IO_STATUS_BLOCK ISB;
 
 
 
-void WaitForComplete()
+NTSTATUS WaitForComplete()
 {
 	DWORD Transferred;
 	ULONG_PTR Key;
 	OVERLAPPED* pOverlapped;
 
 	GetQueuedCompletionStatus(hIOCP, &Transferred, &Key, &pOverlapped, INFINITE);
+
+	return pOverlapped->Internal;
 }
 
 void DemoConnect()
@@ -212,18 +219,13 @@ void RioDemo()
 
 void main()
 {
-
-
 	// Currently NAPI only exposes support for IOCP-based IRP completion notification, as the expected use-case is 
 	// for server software.
 	hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
 
 
 	//DemoAccept();
-	DemoConnect();
+	//DemoConnect();
 
 	//RioDemo();
-	
-
-
 }

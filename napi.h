@@ -18,6 +18,8 @@
 #define __MAKE_SOCKET_PARAMS(type, proto) ((ULONG(type) << 16) | ULONG(proto))
 #define __SOCKET_PARAMS_GET_TYPE(params) (params >> 16)
 #define __SOCKET_PARAMS_GET_PROTO(params) (params & 0xFFFF)
+
+
 #define SOCK_UDP __MAKE_SOCKET_PARAMS(SOCK_DGRAM, IPPROTO_UDP)
 #define SOCK_TCP __MAKE_SOCKET_PARAMS(SOCK_STREAM, IPPROTO_TCP)
 
@@ -29,11 +31,16 @@
 #define __SOCKET_OPTION_GET_LEVEL(params) (params >> 16)
 #define __SOCKET_OPTION_GET_NAME(params) (params & 0xFFFF)
 
-// SOL_SOCKET
-#undef SO_SNDBUF
-#define SO_SNDBUF __MAKE_SOCKET_OPTION(SOL_SOCKET, 0x1001)
-#undef SO_RCVBUF
-#define SO_RCVBUF __MAKE_SOCKET_OPTION(SOL_SOCKET, 0x1002)
+
+#define SOPT_SNDBUF  __MAKE_SOCKET_OPTION(SOL_SOCKET, SO_SNDBUF)
+#define SOPT_RCVBUF  __MAKE_SOCKET_OPTION(SOL_SOCKET, SO_RCVBUF)
+
+#define SOPT_ORIGINAL_ARRIVAL_IF  __MAKE_SOCKET_OPTION(IPPROTO_IP, IP_ORIGINAL_ARRIVAL_IF)
+#define SOPT_DONT_FRAGMENT        __MAKE_SOCKET_OPTION(IPPROTO_IP, IP_DONTFRAGMENT)
+
+#define SOPT_RECV_MAX_COALESCED_SIZE  __MAKE_SOCKET_OPTION(IPPROTO_UDP, UDP_RECV_MAX_COALESCED_SIZE)
+#define SOPT_SEND_MSG_SIZE            __MAKE_SOCKET_OPTION(IPPROTO_UDP, UDP_SEND_MSG_SIZE)
+
 
 // IPPROTO_TCP
 #undef TCP_NODELAY
@@ -126,8 +133,8 @@ struct RIO_COMPLETION_ENTRY
 // Ring control area
 __declspec(align(16)) struct RIO_RING
 {
-	ULONG Head;
-	ULONG Tail;
+	ULONG Tail; /* Modified by kernel; read-only for user. */
+	ULONG Head; /* Modified by user; read-only for kernel. */
 };
 
 // Request ring layout.
@@ -149,6 +156,27 @@ struct NETBUF
 {
 	ULONG Length;
 	VOID* Data;
+};
+
+#define NBF_MEM   (1<<0)
+#define NBF_FILE  (1<<1)
+#define NBF_EOP   (1<<2)
+
+struct NETBUFEX
+{
+	ULONG Flags;
+	ULONG Length;
+
+	union
+	{
+		PVOID Buffer;
+
+		struct
+		{
+			ULONG64 FileOffset;
+			HANDLE FileHandle;
+		};
+	};
 };
 
 
@@ -193,9 +221,31 @@ NTSTATUS NxSocket
 NTSTATUS NxBind
 (
 	HANDLE Socket, 
-	sockaddr* Address, 
+	PVOID Address, 
 	ULONG AddressLength, 
 	ULONG Share
+);
+
+
+/*
+ * NxAssociate
+ *   Associates a datagram socket (binds) with a remote address..
+ * 
+ * Parameters:
+ *   [in] 'hSocket'       -- Handle to the socket to associate.
+ *   [in] 'Address'       -- Pointer to a buffer containing the remote socket address.
+ *   [in] 'AddressLength' -- Length of the address pointed to by 'Address'
+ *
+ * Return:
+ *    On success the return value is zero, elsewise on failure the return value is a status
+ *    code indicating the error condition.
+ * 
+ */
+NTSTATUS NxAssociate
+(
+	HANDLE hSocket,
+	PVOID Address,
+	ULONG AddressLength
 );
 
 
@@ -254,7 +304,7 @@ NTSTATUS NxConnect
 (
 	HANDLE hSocket, 
 	IO_STATUS_BLOCK* IoStatus, 
-	sockaddr* Address, 
+	PVOID Address, 
 	USHORT AddressLength
 );
 
@@ -287,6 +337,21 @@ NTSTATUS NxSend
 
 
 /*
+ * NxSendDatagram
+ *
+ */
+NTSTATUS NxSendDatagram
+(
+	HANDLE hSocket,
+	IO_STATUS_BLOCK* IoStatus,
+	NETBUF* Buffers,
+	ULONG BufferCount,
+	VOID* DestinationAddress,
+	ULONG DestinationAddressLength
+);
+
+
+/*
  * NxReceive
  *
  */
@@ -297,6 +362,41 @@ NTSTATUS NxReceive
 	NETBUF* Buffers, 
 	ULONG BufferCount,
 	ULONG Flags
+);
+
+
+/*
+ * NxReceiveDatagram
+ *
+ */
+NTSTATUS NxReceiveDatagram
+(
+	HANDLE hSocket,
+	IO_STATUS_BLOCK* IoStatus,
+	NETBUF* Buffers,
+	ULONG BufferCount,
+	ULONG Flags,
+	PVOID Address,
+	ULONG* AddressLength
+);
+
+
+/*
+ * NxReceiveMessage
+ *
+ */
+NTSTATUS NxReceiveMessage
+(
+	HANDLE hSocket,
+	IO_STATUS_BLOCK* IoStatus,
+	NETBUF* Buffers,
+	ULONG BufferCount,
+	ULONG Flags,
+	PVOID Address,
+	ULONG* AddressLength,
+	PVOID ControlBuffer,
+	ULONG* ControlBufferLength,
+	ULONG* MsgFlags
 );
 
 
@@ -417,6 +517,13 @@ NTSTATUS NxRegisterRequestRing
 	ULONG RxCompletionRingId,
 	PVOID Context
 );
+
+
+/*
+ * NxNotify
+ *
+ */
+NTSTATUS NxNotify(ULONG CompletionQueueId);
 
 
 /*

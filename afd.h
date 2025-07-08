@@ -1,9 +1,10 @@
 /*
  * afd.h
- *   Defines the interface to the Auxillary Function Driver (afd.sys)
+ *   Defines the interface to the Ancillary Function Driver (afd.sys)
  *
  */
 #pragma once
+#include "tdi.h"
 
 
 
@@ -12,7 +13,7 @@ struct AFD_TRANSPORT_IOCTL_IN
 {
 	ULONG Mode;
 	ULONG Level;
-	ULONG IoControlCode;
+	ULONG Name;
 	ULONG Flag;
 	PVOID InputBuffer;
 	ULONGLONG InputLength;
@@ -22,26 +23,29 @@ struct AFD_TRANSPORT_IOCTL_IN
 #define AFD_TLI_WRITE  1
 #define AFD_TLI_READ   2
 
-// AFD commands
+// AFD functions
 #define AFD_BIND			    0
 #define AFD_CONNECT			    1
 #define AFD_START_LISTEN	    2
-#define AFD_ACCEPT              3
-#define AFD_RECEIVE             4
-#define AFD_RECV			    5
+#define AFD_WAIT_FOR_LISTEN     3
+#define AFD_ACCEPT              4
+#define AFD_RECEIVE             5
+#define AFD_RECEIVE_DATAGRAM    6
 #define AFD_SEND			    7
 #define AFD_SEND_DATAGRAM       8
 #define AFD_PARTIAL_DISCONNECT  10
 #define AFD_SET_INFO            14
-#define AFD_ACCEPTEX            32
+#define AFD_SUPER_ACCEPT        32
 #define AFD_TRANSPORT_IOCTL     47
-#define AFD_CONNECTEX           49
+#define AFD_SUPER_CONNECT       49
+#define AFD_RECEIVE_MESSAGE     51
 #define AFD_RIO                 70
+
 
 // AFD IOCTLs
 #define FSCTL_AFD_BASE   FILE_DEVICE_NETWORK
-#define _AFD_CONTROL_CODE(Operation, Method) \
-  ((FSCTL_AFD_BASE)<<12 | (Operation<<2) | Method)
+#define _AFD_CONTROL_CODE(Function, Method) \
+	((FSCTL_AFD_BASE)<<12 | (Function<<2) | Method)
 
 #define IOCTL_AFD_BIND \
   _AFD_CONTROL_CODE(AFD_BIND, METHOD_NEITHER)
@@ -55,23 +59,32 @@ struct AFD_TRANSPORT_IOCTL_IN
 #define IOCTL_AFD_RIO \
   _AFD_CONTROL_CODE(AFD_RIO, METHOD_NEITHER)
 
-#define IOCTL_AFD_RECV \
-  _AFD_CONTROL_CODE(AFD_RECV, METHOD_NEITHER)
+#define IOCTL_AFD_RECEIVE \
+  _AFD_CONTROL_CODE(AFD_RECEIVE, METHOD_NEITHER)
+
+#define IOCTL_AFD_RECEIVE_DATAGRAM \
+  _AFD_CONTROL_CODE(AFD_RECEIVE_DATAGRAM, METHOD_NEITHER)
 
 #define IOCTL_AFD_SEND \
   _AFD_CONTROL_CODE(AFD_SEND, METHOD_NEITHER)
+
+#define IOCTL_AFD_SEND_DATAGRAM \
+  _AFD_CONTROL_CODE(AFD_SEND_DATAGRAM, METHOD_NEITHER)
 
 #define IOCTL_AFD_SET_INFO \
   _AFD_CONTROL_CODE(AFD_SET_INFO, METHOD_NEITHER)
 
 #define IOCTL_AFD_ACCEPTEX \
-  _AFD_CONTROL_CODE(AFD_ACCEPTEX, METHOD_NEITHER)
+  _AFD_CONTROL_CODE(AFD_SUPER_ACCEPT, METHOD_NEITHER)
 
 #define IOCTL_AFD_TRANSPORT_IOCTL \
   _AFD_CONTROL_CODE(AFD_TRANSPORT_IOCTL, METHOD_NEITHER)
 
 #define IOCTL_AFD_CONNECTEX \
-  _AFD_CONTROL_CODE(AFD_CONNECTEX, METHOD_NEITHER)
+  _AFD_CONTROL_CODE(AFD_SUPER_CONNECT, METHOD_NEITHER)
+
+#define IOCTL_AFD_RECEIVE_MESSAGE \
+  _AFD_CONTROL_CODE(AFD_RECEIVE_MESSAGE, METHOD_NEITHER)
 
 #define IOCTL_AFD_PARTIAL_DISCONNECT \
   _AFD_CONTROL_CODE(AFD_PARTIAL_DISCONNECT, METHOD_NEITHER)
@@ -100,58 +113,6 @@ struct AFD_TRANSPORT_IOCTL_IN
 #define AFD_OVERLAPPED      0x0002  // Overlapped operation.
 #define AFD_IMMEDIATE       0x0004
 
-#define TDI_RECEIVE_BROADCAST           0x00000004 // received TSDU was broadcast.
-#define TDI_RECEIVE_MULTICAST           0x00000008 // received TSDU was multicast.
-#define TDI_RECEIVE_PARTIAL             0x00000010 // received TSDU is not fully presented.
-#define TDI_RECEIVE_NORMAL              0x00000020 // received TSDU is normal data
-#define TDI_RECEIVE_EXPEDITED           0x00000040 // received TSDU is expedited data
-#define TDI_RECEIVE_PEEK                0x00000080 // received TSDU is not released
-#define TDI_RECEIVE_NO_RESPONSE_EXP     0x00000100 // HINT: no back-traffic expected
-#define TDI_RECEIVE_COPY_LOOKAHEAD      0x00000200 // for kernel-mode indications
-#define TDI_RECEIVE_ENTIRE_MESSAGE      0x00000400 // opposite of RECEIVE_PARTIAL
-
-//  (for kernel-mode indications)
-#define TDI_RECEIVE_AT_DISPATCH_LEVEL   0x00000800 // receive indication called
-												   //  at dispatch level
-#define TDI_RECEIVE_CONTROL_INFO        0x00001000 // Control info is being passed up.
-#define TDI_RECEIVE_FORCE_INDICATION    0x00002000 // reindicate rejected data.
-#define TDI_RECEIVE_NO_PUSH             0x00004000 // complete only when full.
-
-// Options which are used for both SendOptions and ReceiveIndicators.
-#define TDI_SEND_EXPEDITED            ((USHORT) 0x0020) // TSDU is/was urgent/expedited.
-#define TDI_SEND_PARTIAL              ((USHORT) 0x0040) // TSDU is/was terminated by an EOR.
-#define TDI_SEND_NO_RESPONSE_EXPECTED ((USHORT) 0x0080) // HINT: no back traffic expected.
-#define TDI_SEND_NON_BLOCKING         ((USHORT) 0x0100) // don't block if no buffer space in protocol
-#define TDI_SEND_AND_DISCONNECT       ((USHORT) 0x0200) // Piggy back disconnect to remote and do not indicate disconnect from remote
-
-// TDI address types
-#define TDI_ADDRESS_TYPE_UNSPEC    ((USHORT) 0)  // unspecified
-#define TDI_ADDRESS_TYPE_UNIX      ((USHORT) 1)  // local to host (pipes, portals)
-#define TDI_ADDRESS_TYPE_IP        ((USHORT) 2)  // internetwork: UDP, TCP, etc.
-#define TDI_ADDRESS_TYPE_IMPLINK   ((USHORT) 3)  // arpanet imp addresses
-#define TDI_ADDRESS_TYPE_PUP       ((USHORT) 4)  // pup protocols: e.g. BSP
-#define TDI_ADDRESS_TYPE_CHAOS     ((USHORT) 5)  // mit CHAOS protocols
-#define TDI_ADDRESS_TYPE_NS        ((USHORT) 6)  // XEROX NS protocols
-#define TDI_ADDRESS_TYPE_IPX       ((USHORT) 6)  // Netware IPX
-#define TDI_ADDRESS_TYPE_NBS       ((USHORT) 7)  // nbs protocols
-#define TDI_ADDRESS_TYPE_ECMA      ((USHORT) 8)  // european computer manufacturers
-#define TDI_ADDRESS_TYPE_DATAKIT   ((USHORT) 9)  // datakit protocols
-#define TDI_ADDRESS_TYPE_CCITT     ((USHORT) 10) // CCITT protocols, X.25 etc
-#define TDI_ADDRESS_TYPE_SNA       ((USHORT) 11) // IBM SNA
-#define TDI_ADDRESS_TYPE_DECnet    ((USHORT) 12) // DECnet
-#define TDI_ADDRESS_TYPE_DLI       ((USHORT) 13) // Direct data link interface
-#define TDI_ADDRESS_TYPE_LAT       ((USHORT) 14) // LAT
-#define TDI_ADDRESS_TYPE_HYLINK    ((USHORT) 15) // NSC Hyperchannel
-#define TDI_ADDRESS_TYPE_APPLETALK ((USHORT) 16) // AppleTalk
-#define TDI_ADDRESS_TYPE_NETBIOS   ((USHORT) 17) // Netbios Addresses
-#define TDI_ADDRESS_TYPE_8022      ((USHORT) 18) //
-#define TDI_ADDRESS_TYPE_OSI_TSAP  ((USHORT) 19) //
-#define TDI_ADDRESS_TYPE_NETONE    ((USHORT) 20) // for WzMail
-#define TDI_ADDRESS_TYPE_VNS       ((USHORT) 21) // Banyan VINES IP
-#define TDI_ADDRESS_TYPE_NETBIOS_EX ((USHORT) 22) // NETBIOS address extensions
-#define TDI_ADDRESS_TYPE_IP6       ((USHORT) 23) // IP version 6
-#define TDI_ADDRESS_TYPE_NETBIOS_UNICODE_EX       ((USHORT)24) // WCHAR Netbios address
-
 // Endpoint flags.
 #define AFD_ENDPOINT_FLAG_CONNECTIONLESS	0x00000001
 #define AFD_ENDPOINT_FLAG_MESSAGEMODE		0x00000010
@@ -166,11 +127,8 @@ struct AFD_TRANSPORT_IOCTL_IN
 // which does not exists).
 //
 #define AfdEndpointTypeStream			0
-#define AfdEndpointTypeDatagram			(AFD_ENDPOINT_FLAG_CONNECTIONLESS|\
-                                            AFD_ENDPOINT_FLAG_MESSAGEMODE)
-#define AfdEndpointTypeRaw				(AFD_ENDPOINT_FLAG_CONNECTIONLESS|\
-                                            AFD_ENDPOINT_FLAG_MESSAGEMODE|\
-                                            AFD_ENDPOINT_FLAG_RAW)
+#define AfdEndpointTypeDatagram			(AFD_ENDPOINT_FLAG_CONNECTIONLESS | AFD_ENDPOINT_FLAG_MESSAGEMODE)
+#define AfdEndpointTypeRaw				(AFD_ENDPOINT_FLAG_CONNECTIONLESS | AFD_ENDPOINT_FLAG_MESSAGEMODE | AFD_ENDPOINT_FLAG_RAW)
 #define AfdEndpointTypeSequencedPacket	(AFD_ENDPOINT_FLAG_MESSAGEMODE)
 #define AfdEndpointTypeReliableMessage	(AFD_ENDPOINT_FLAG_MESSAGEMODE)
 
@@ -180,7 +138,6 @@ struct AFD_TRANSPORT_IOCTL_IN
 #define AFD_ENDPOINT_FLAG_MULTIPOINT	    0x00001000
 #define AFD_ENDPOINT_FLAG_CROOT			    0x00010000
 #define AFD_ENDPOINT_FLAG_DROOT			    0x00100000
-
 
 // AFD device name.
 #define AFD_DEVICE_NAME  L"\\Device\\Afd\\Endpoint"
@@ -209,14 +166,14 @@ struct AFD_OPEN_IN
 };
 
 
-struct AFD_BIND_DATA
+struct AFD_BIND_IN
 {
 	ULONG ShareType;
 	BYTE AddressData[28];
 };
 
 
-struct AFD_LISTEN_DATA
+struct AFD_LISTEN_IN
 {
 	BOOL	UseSAN;
 	ULONG	Backlog;
@@ -224,7 +181,15 @@ struct AFD_LISTEN_DATA
 };
 
 
-struct AFD_CONNECTEX_DATA
+struct AFD_CONNECT_IN
+{
+	BOOLEAN SanActive;
+	HANDLE RootEndpoint;
+	HANDLE ConnectEndpoint;
+	BYTE AddressData[28];
+};
+
+struct AFD_SUPER_CONNECT_IN
 {
 	BOOL UseSAN;
 	ULONG Tdi;
@@ -232,7 +197,7 @@ struct AFD_CONNECTEX_DATA
 	BYTE AddressData[28];
 };
 
-struct AFD_ACCEPTEX_DATA
+struct AFD_SUPER_ACCEPT_IN
 {
 	BOOLEAN UseSAN;
 	BOOLEAN Unk; // TRUE
@@ -254,7 +219,7 @@ struct AFD_INFORMATION
 	} Information;
 };
 
-struct AFD_SEND_DATA
+struct AFD_SEND_IN
 {
 	NETBUF* Buffers;
 	ULONG BufferCount;
@@ -263,8 +228,26 @@ struct AFD_SEND_DATA
 	ULONG Unused;
 };
 
+struct AFD_SEND_DATAGRAM_IN
+{
+	NETBUF* Buffers;
+	ULONG BufferCount;
+	ULONG AfdFlags;
+	TDI_REQUEST_SEND_DATAGRAM  TdiRequest;
+	TDI_CONNECTION_INFORMATION  TdiConnInfo;
+};
 
-struct AFD_RECV_DATA
+struct AFD_RECV_DATAGRAM_IN
+{
+	NETBUF* Buffers;
+	ULONG BufferCount;
+	ULONG AfdFlags;
+	ULONG TdiFlags;
+	PVOID Address;
+	PULONG AddressLength;
+};
+
+struct AFD_RECV_IN
 {
 	NETBUF* Buffers;
 	ULONG BufferCount;
@@ -273,8 +256,24 @@ struct AFD_RECV_DATA
 	ULONG Unused;
 };
 
+struct AFD_RECEIVE_MESSAGE_IN
+{
+	AFD_RECV_DATAGRAM_IN Datagram;
+	PVOID ControlBuffer;
+	PULONG ControlBufferLength;
+	PULONG MsgFlags;
+};
 
-struct AFD_PARTIAL_DISCONNECT_DATA
+struct AFD_TRANSMIT_PACKETS_IN
+{
+	NETBUFEX* Buffers;
+	ULONG Count;
+	ULONG SendSize;
+	ULONG Flags;
+};
+
+
+struct AFD_PARTIAL_DISCONNECT_IN
 {
 	ULONG Flags;
 	ULONG64 Timeout;
@@ -296,14 +295,12 @@ struct AFD_RIO_POKE_IN
 	ULONG Operation;
 };
 
-
 struct AFD_RIO_REGISTER_IN
 {
 	ULONG Operation;
 	PVOID64 RegionBaseAddress;
 	ULONG RegionSize;
 };
-
 
 struct AFD_RIO_CQ_REGISTER_IN
 {
@@ -331,7 +328,6 @@ struct AFD_RIO_CQ_REGISTER_IN
 	PVOID64 Ring;
 };
 
-
 struct AFD_RIO_RQ_REGISTER_IN
 {
 	ULONG Operation;
@@ -347,3 +343,8 @@ struct AFD_RIO_RQ_REGISTER_IN
 	PVOID Context;
 };
 
+struct AFD_RIO_NOTIFY_IN
+{
+	ULONG Operation;
+	ULONG CompletionQueueId;
+};

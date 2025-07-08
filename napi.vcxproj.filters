@@ -3,6 +3,7 @@
   <ItemGroup>
     <ClInclude Include="afd.h" />
     <ClInclude Include="napi.h" />
+    <ClInclude Include="tdi.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="napi.cpp" />
