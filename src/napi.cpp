@@ -488,13 +488,15 @@ NTSTATUS NxGetOption(HANDLE hSocket, ULONG Option, ULONG* Value)
 			TransportIoctl.Level = __SOCKET_OPTION_GET_LEVEL(Option);
 			TransportIoctl.Name = __SOCKET_OPTION_GET_NAME(Option);
 			TransportIoctl.Flag = TRUE;
+			TransportIoctl.InputBuffer = NULL;
+			TransportIoctl.InputLength = 0;
 
 			Ioctl = IOCTL_AFD_TRANSPORT_IOCTL;
 			InputLength = sizeof(TransportIoctl);
 		}
 	}
 
-	Status = NtDeviceIoControlFile(hSocket, NULL, NULL, NULL, &IoStatus, Ioctl, Input, InputLength, &Value, sizeof(Value));
+	Status = NtDeviceIoControlFile(hSocket, NULL, NULL, NULL, &IoStatus, Ioctl, Input, InputLength, Value, sizeof(Value));
 
 	if(Status == STATUS_PENDING)
 		Status = IrpBusyWait(&IoStatus);

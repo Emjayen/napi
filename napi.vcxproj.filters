@@ -1,12 +1,12 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClInclude Include="afd.h" />
-    <ClInclude Include="napi.h" />
-    <ClInclude Include="tdi.h" />
+    <ClCompile Include="test.cpp" />
+    <ClCompile Include="src\napi.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="napi.cpp" />
-    <ClCompile Include="test.cpp" />
+    <ClInclude Include="src\afd.h" />
+    <ClInclude Include="src\napi.h" />
+    <ClInclude Include="src\tdi.h" />
   </ItemGroup>
 </Project>

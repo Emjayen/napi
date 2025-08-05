@@ -4,6 +4,7 @@
  */
 #pragma once
 #pragma warning(disable:4200)
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include "nt/nt.h"
 #include <ws2def.h>
 #include <mstcpip.h>
@@ -37,6 +38,7 @@
 
 #define SOPT_ORIGINAL_ARRIVAL_IF  __MAKE_SOCKET_OPTION(IPPROTO_IP, IP_ORIGINAL_ARRIVAL_IF)
 #define SOPT_DONT_FRAGMENT        __MAKE_SOCKET_OPTION(IPPROTO_IP, IP_DONTFRAGMENT)
+#define SOPT_MTU                  __MAKE_SOCKET_OPTION(IPPROTO_IP, IP_MTU)
 
 #define SOPT_RECV_MAX_COALESCED_SIZE  __MAKE_SOCKET_OPTION(IPPROTO_UDP, UDP_RECV_MAX_COALESCED_SIZE)
 #define SOPT_SEND_MSG_SIZE            __MAKE_SOCKET_OPTION(IPPROTO_UDP, UDP_SEND_MSG_SIZE)
@@ -410,6 +412,13 @@ NTSTATUS NxSetOption
 	ULONG Option,
 	ULONG Value
 );
+
+
+/*
+ * NxGetOption
+ *
+ */
+NTSTATUS NxGetOption(HANDLE hSocket, ULONG Option, ULONG* Value);
 
 
 /*
